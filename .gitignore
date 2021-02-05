@@ -1,0 +1,17 @@
+node_modules/
+cache/
+build/
+typechain/
+artifacts/
+coverage*
+.env*
+!.env.example
+whitelist.json
+contractsInfo.json
+.vscode/*
+!.vscode/*.default
+
+deployments/*
+!deployments/mainnet
+.openzeppelin/*
+!.openzeppelin/mainnet.json
