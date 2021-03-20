@@ -6,3 +6,4 @@ export/
 node_module/
 typechain/
 package.json
+dist/

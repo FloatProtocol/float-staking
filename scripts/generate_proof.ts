@@ -3,7 +3,7 @@ import fs from "fs";
 import MerkleTree from "../test/merkletree";
 
 async function main() {
-  const whitelistFp = fs.readFileSync("./whitelist.json", "utf-8");
+  const whitelistFp = fs.readFileSync("./whitelist_week_3.json", "utf-8");
   const whitelistEntries = JSON.parse(whitelistFp);
   const target = "0x7901b69375DBE302163237e9E08063f3a5AfbF4f";
 

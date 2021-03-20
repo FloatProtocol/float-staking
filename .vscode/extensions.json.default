@@ -3,7 +3,8 @@
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
     "hbenl.vscode-mocha-test-adapter",
-    "juanblanco.solidity"
+    "juanblanco.solidity",
+    "ryanluker.vscode-coverage-gutters"
   ],
   "unwantedRecommendations": []
 }

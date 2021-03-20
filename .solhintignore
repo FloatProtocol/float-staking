@@ -1,0 +1,14 @@
+node_modules/
+
+# Pre-existing contracts by others
+contracts/staking/RewardDistributionRecipient.sol
+contracts/TimeLock.sol
+contracts/lib/
+
+# Freeze style errors for staking as deployed
+contracts/staking/
+contracts/BankToken.sol
+
+
+# Don't style check mocks
+contracts/mock/

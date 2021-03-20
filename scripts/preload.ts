@@ -1,25 +1,21 @@
 import { parseUnits } from "ethers/lib/utils";
-import { ethers } from "hardhat";
-
-import DAI_D from "../deployments/rinkeby/DAI.json";
-import USDC_D from "../deployments/rinkeby/USDC.json";
-import USDT_D from "../deployments/rinkeby/USDT.json";
+import hre, { ethers } from "hardhat";
 
 async function main() {
+  const { deployments } = hre;
   const [deployer] = await ethers.getSigners();
 
-  // await deployer.sendTransaction({
-  //   to: process.env.DEV_ACCOUNT,
-  //   value: ethers.utils.parseEther("100"),
-  // });
+  const usdtDeployment = await deployments.get("USDT");
+  const usdcDeployment = await deployments.get("USDC");
+  const daiDeployment = await deployments.get("DAI");
 
-  const DAI = await ethers.getContractAt(DAI_D.abi, DAI_D.address);
+  const DAI = await ethers.getContractAt(daiDeployment.abi, daiDeployment.address);
   await DAI.connect(deployer).mint(deployer.address, parseUnits("50000", 18));
 
-  const USDC = await ethers.getContractAt(USDC_D.abi, USDC_D.address);
+  const USDC = await ethers.getContractAt(usdcDeployment.abi, usdcDeployment.address);
   await USDC.connect(deployer).mint(deployer.address, parseUnits("50000", 6));
 
-  const USDT = await ethers.getContractAt(USDT_D.abi, USDT_D.address);
+  const USDT = await ethers.getContractAt(usdtDeployment.abi, usdtDeployment.address);
   await USDT.connect(deployer).mint(deployer.address, parseUnits("50000", 6));
 }
 

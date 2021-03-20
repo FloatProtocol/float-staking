@@ -1,22 +1,21 @@
 import { parseUnits } from "ethers/lib/utils";
-import { ethers } from "hardhat";
-
-import BANK_D from "../deployments/mainnet/BANK.json";
-
-import DAIPool_D from "../deployments/mainnet/DAIPool.json";
-import USDCPool_D from "../deployments/mainnet/USDCPool.json";
-import USDTPool_D from "../deployments/mainnet/USDTPool.json";
+import hre, { ethers } from "hardhat";
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-  
-  const rewardAmount = parseUnits("3500", 18);
-  // const rewardAmount = parseUnits("3500", 22);
+  const { deployments } = hre;
 
-  const BANK = await ethers.getContractAt(BANK_D.abi, BANK_D.address);
-  const DAIPool = await ethers.getContractAt(DAIPool_D.abi, DAIPool_D.address);
-  const USDCPool = await ethers.getContractAt(USDCPool_D.abi, USDCPool_D.address);
-  const USDTPool = await ethers.getContractAt(USDTPool_D.abi, USDTPool_D.address);
+  const rewardAmount = parseUnits("3500", 18);
+
+  const bankDeployment = await deployments.get("BANK");
+  const usdtPoolDeployment = await deployments.get("USDTPool");
+  const usdcPoolDeployment = await deployments.get("USDCPool");
+  const daiPoolDeployment = await deployments.get("DAIPool");
+
+  const BANK = await ethers.getContractAt(bankDeployment.abi, bankDeployment.address);
+  const DAIPool = await ethers.getContractAt(daiPoolDeployment.abi, daiPoolDeployment.address);
+  const USDCPool = await ethers.getContractAt(usdcPoolDeployment.abi, usdcPoolDeployment.address);
+  const USDTPool = await ethers.getContractAt(usdtPoolDeployment.abi, usdtPoolDeployment.address);
 
   // Mint to Pools
   console.log("Minting to pools...");

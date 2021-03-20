@@ -1,6 +1,6 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signer-with-address";
 import { expect } from "chai";
-import { BigNumber, BigNumberish, Contract, ContractTransaction } from "ethers";
+import { BigNumber, BigNumberish, Contract, ContractFactory, ContractTransaction } from "ethers";
 import { ethers } from "hardhat";
 import _ from "underscore";
 import { TokenMock } from "../typechain";
@@ -9,24 +9,26 @@ import { solidityKeccak256 } from "ethers/lib/utils";
 
 interface SetupContractArgs {
   accounts: SignerWithAddress[];
-  name: string;
+  name?: string;
+  factory?: ContractFactory;
   args?: unknown[];
 }
 
 export async function setupContract<T = Contract>({
   accounts,
   name,
+  factory,
   args = undefined,
 }: SetupContractArgs): Promise<T> {
   const [deployerAccount] = accounts;
-  const factory = await ethers.getContractFactory(name, deployerAccount);
+  const contractFactory = factory ?? await ethers.getContractFactory(name ?? "", deployerAccount);
 
   const defaultArgs: { [name: string]: unknown[] } = {
     "MockToken": ["name", "ABC"],
   };
 
-  const constructorArgs = args || defaultArgs[name] || [];
-  const _contract = await factory.deploy(...constructorArgs);
+  const constructorArgs = args ?? (name ? defaultArgs[name] : []);
+  const _contract = await contractFactory.deploy(...constructorArgs);
   await _contract.deployed();
   const contract = _contract as unknown as T;
   return contract;
@@ -105,7 +107,7 @@ interface EnsureOnlyExpectedMutativeFunctionsArgs {
   expected: string[];
 }
 
-export function ensureOnlyExpectedMutativeFunctions({ contractInterface, expected}: EnsureOnlyExpectedMutativeFunctionsArgs): void {
+export function ensureOnlyExpectedMutativeFunctions({ contractInterface, expected }: EnsureOnlyExpectedMutativeFunctionsArgs): void {
   const functionFragments = Object.entries(contractInterface.functions);
   const mutatingFunctions = functionFragments.filter(([, frag]) => !frag.constant).map((([n,]) => n)).sort();
 

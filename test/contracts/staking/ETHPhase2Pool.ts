@@ -1,35 +1,29 @@
 import { ethers } from "hardhat";
 import chai from "chai";
-import { deployMockContract, MockContract, solidity } from "ethereum-waffle";
+import { solidity } from "ethereum-waffle";
 import {
-  Phase1Pool,
+  ETHPhase2Pool,
   TokenMock,
-} from "../../typechain";
-import IWhitelist from "../../artifacts/contracts/interfaces/IWhitelist.sol/IWhitelist.json";
-
+} from "../../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signer-with-address";
-import { currentTime, DAY, toUnit, expectOnlyAddressCanInvoke, increaseTime, mockToken, setupContract, ensureOnlyExpectedMutativeFunctions, DEFAULT_ROLE, role } from "../helper";
+import { currentTime, DAY, toUnit, expectOnlyAddressCanInvoke, increaseTime, mockToken, setupContract, WEEK, ensureOnlyExpectedMutativeFunctions, fromUnit, DEFAULT_ROLE, role } from "../../helper";
 import { BigNumber } from "ethers";
-import { solidityKeccak256 } from "ethers/lib/utils";
+import { formatUnits } from "@ethersproject/units";
 
 chai.use(solidity);
 const { expect } = chai;
 
-describe("Phase1Pool", () => {
-  let rewardContract: Phase1Pool;
+describe("ETHPhase2Pool", () => {
+  let rewardContract: ETHPhase2Pool;
   let rewardToken: TokenMock;
-  let stakeToken: TokenMock;
-  let mockWhitelist: MockContract;
 
   let owner: SignerWithAddress;
   let rewardDistribution: SignerWithAddress;
   let stakingAccount: SignerWithAddress;
   let others: SignerWithAddress[];
 
-  const DURATION = DAY.mul(7);
-  const OWNER_PRESUPPLY = toUnit(15_000);
-  const FAKE_PROOF = [solidityKeccak256(["string"], ["FAKE_PROOF"])];
-  const MAXIMUM_CONTRIBUTION = toUnit(10_000);
+  const DURATION = WEEK;
+  const OWNER_PRESUPPLY = toUnit(1e4);
 
   beforeEach(async () => {
     [owner, rewardDistribution, stakingAccount, ...others] = await ethers.getSigners();
@@ -40,36 +34,25 @@ describe("Phase1Pool", () => {
       name: "External Reward Token",
       symbol: "RWRD",
     });
-    stakeToken = await mockToken({
-      accounts: [owner],
-      name: "Staking Token",
-      symbol: "STKN",
-    });
-
-    // Setup Whitelist, fail-open
-    mockWhitelist = await deployMockContract(owner, IWhitelist.abi);
-    await mockWhitelist.mock.whitelisted.returns(true);
 
     // Presupply owner to make tests easier.
     await rewardToken.connect(owner).mint(owner.address, OWNER_PRESUPPLY);
-    await stakeToken.connect(owner).mint(owner.address, OWNER_PRESUPPLY);
 
-    rewardContract = await setupContract<Phase1Pool>({
+    rewardContract = await setupContract<ETHPhase2Pool>({
       accounts: [owner],
-      name: "Phase1Pool",
-      args: [owner.address, rewardDistribution.address, mockWhitelist.address, rewardToken.address, stakeToken.address, MAXIMUM_CONTRIBUTION],
+      name: "ETHPhase2Pool",
+      args: [owner.address, rewardDistribution.address, rewardToken.address],
     });
 
     expect(rewardContract.address).to.properAddress;
     expect(rewardToken.address).to.properAddress;
-    expect(stakeToken.address).to.properAddress;
   });
 
   it("ensure only known functions are mutative", () => {
     ensureOnlyExpectedMutativeFunctions({
       contractInterface: rewardContract.interface,
       expected: [
-        "stakeWithProof(uint256,bytes32[])",
+        "stake(uint256)",
         "withdraw(uint256)",
         "exit()",
         "getReward()",
@@ -83,14 +66,10 @@ describe("Phase1Pool", () => {
       ],
     });
   });
-  
+
   describe("Constructor & Settings", async () => {
     it("should set rewards token on constructor", async () => {
       expect(await rewardContract.rewardToken()).to.equal(rewardToken.address);
-    });
-
-    it("should staking token on constructor", async () => {
-      expect(await rewardContract.stakeToken()).to.equal(stakeToken.address);
     });
 
     it("should set access control on constructor", async () => {
@@ -102,13 +81,9 @@ describe("Phase1Pool", () => {
 
       const defaultRoleAdminAddress = await rewardContract.getRoleMember(DEFAULT_ROLE, 0);
       expect(defaultRoleAdminAddress).to.equal(owner.address);
-    
+
       const recoverRoleAddress = await rewardContract.getRoleMember(role("RECOVER_ROLE"), 0);
       expect(recoverRoleAddress).to.equal(owner.address);
-    });
-
-    it("should set maximum contribution on constructor", async () => {
-      expect(await rewardContract.maximumContribution()).to.equal(MAXIMUM_CONTRIBUTION);
     });
   });
 
@@ -116,7 +91,7 @@ describe("Phase1Pool", () => {
     const rewardValue = toUnit(1.0);
 
     beforeEach(async () => {
-      // Transfer some reward ammount to the contract, so that we can call notifyRewardAmount
+      // Transfer some reward amount to the contract, so that we can call notifyRewardAmount
       await rewardToken.connect(owner).mint(rewardContract.address, rewardValue);
     });
 
@@ -154,14 +129,6 @@ describe("Phase1Pool", () => {
         accounts: others,
         allowedAccount: owner
       });
-    });
-
-    it("should revert if recovering staking token", async () => {
-      await expect(
-        rewardContract
-          .connect(owner)
-          .recoverERC20(stakeToken.address, amount)
-      ).to.be.revertedWith("Phase2Pool::recoverERC20: Cannot recover the staking token");
     });
 
     it("should retrieve external token from rewardContract and reduce contracts balance", async () => {
@@ -206,7 +173,7 @@ describe("Phase1Pool", () => {
   });
 
   describe("rewardPerToken()", () => {
-    const totalToStake = toUnit(100);
+    const totalToStake = toUnit(10);
     const totalReward = toUnit(5000);
 
     it("should return 0", async () => {
@@ -214,11 +181,7 @@ describe("Phase1Pool", () => {
     });
 
     it("should be > 0", async () => {
-      await mockWhitelist.mock.whitelisted.withArgs(stakingAccount.address, FAKE_PROOF).returns(true);
-
-      await stakeToken.connect(owner).transfer(stakingAccount.address, totalToStake);
-      await stakeToken.connect(stakingAccount).approve(rewardContract.address, totalToStake);
-      await rewardContract.connect(stakingAccount).stakeWithProof(totalToStake, FAKE_PROOF);
+      await rewardContract.connect(stakingAccount).stake(totalToStake, { value: totalToStake });
 
       const totalSupply = await rewardContract.totalSupply();
       expect(totalSupply).to.be.above(0);
@@ -233,73 +196,47 @@ describe("Phase1Pool", () => {
   });
 
   describe("stake()", () => {
-    it("cannot stake with standard interface", async () => {
-      await expect(rewardContract.stake(10)).to.be.revertedWith("Phase1Pool::stake: Cannot stake on Phase1Pool directly due to whitelist");
-    });
-  });
+    const totalToStake = toUnit(10);
 
-  describe("stakeWithProof()", () => {
-    const totalToStake = toUnit(100);
+    it("staking using legacy increases staking balance", async () => {
 
-    describe("when whitelisted", () => {
-      beforeEach(async () => {
-        await mockWhitelist.mock.whitelisted.returns(true);
-      });
+      const initialStakeBal = await rewardContract.balanceOf(stakingAccount.address);
+      const initialUnderlyingBal = await stakingAccount.getBalance();
 
-      it("cannot stake 0", async () => {
-        await expect(rewardContract.stakeWithProof(0, FAKE_PROOF)).to.be.revertedWith("Cannot stake 0");
-      });
+      await stakingAccount.sendTransaction({ value: totalToStake, to: rewardContract.address });
 
-      it("cannot stake over limit", async () => {
-        await stakeToken.connect(owner).transfer(stakingAccount.address, toUnit(10_001));
-        await stakeToken.connect(stakingAccount).approve(rewardContract.address, toUnit(10_001));
+      const postStakeBal = await rewardContract.balanceOf(stakingAccount.address);
+      const postUnderlyingBal = await stakingAccount.getBalance();
 
-        await expect(rewardContract.connect(stakingAccount).stakeWithProof(toUnit(10_001), FAKE_PROOF)).to.be.revertedWith("Phase1Pool::stake: Cannot exceed maximum contribution");
-      });
-
-      it("cannot stake over limit in multiple transactions", async () => {
-        // Setup contract
-        await stakeToken.connect(owner).transfer(stakingAccount.address, toUnit(10_001));
-        await stakeToken.connect(stakingAccount).approve(rewardContract.address, toUnit(10_001));
-        
-        // Load up to limit
-        await rewardContract.connect(stakingAccount).stakeWithProof(toUnit(9_999), FAKE_PROOF);
-        await rewardContract.connect(stakingAccount).stakeWithProof(toUnit(1), FAKE_PROOF);
-
-        // Try overdoing it
-        await expect(rewardContract.connect(stakingAccount).stakeWithProof(toUnit(0.1), FAKE_PROOF)).to.be.revertedWith("Phase1Pool::stake: Cannot exceed maximum contribution");
-      });
-
-      it("staking increases staking balance", async () => {
-        await stakeToken.connect(owner).transfer(stakingAccount.address, totalToStake);
-        await stakeToken.connect(stakingAccount).approve(rewardContract.address, totalToStake);
-  
-        const initialStakeBal = await rewardContract.balanceOf(stakingAccount.address);
-        const initialUnderlyingBal = await stakeToken.balanceOf(stakingAccount.address);
-  
-        await rewardContract.connect(stakingAccount).stakeWithProof(totalToStake, FAKE_PROOF);
-  
-        const postStakeBal = await rewardContract.balanceOf(stakingAccount.address);
-        const postUnderlyingBal = await stakeToken.balanceOf(stakingAccount.address);
-  
-        expect(postUnderlyingBal).to.be.below(initialUnderlyingBal);
-        expect(postStakeBal).to.be.above(initialStakeBal);
-      });
+      expect(postUnderlyingBal).to.be.below(initialUnderlyingBal);
+      expect(postStakeBal).to.be.above(initialStakeBal);
     });
 
-    describe("when not whitelisted", () => {
-      beforeEach(async () => {
-        await mockWhitelist.mock.whitelisted.returns(false);
-      });
+    it("staking increases staking balance", async () => {
 
-      it("cannot stake", async () => {
-        await expect(rewardContract.stakeWithProof(0, FAKE_PROOF)).to.be.revertedWith("Whitelisted::onlyWhitelisted: Caller is not whitelisted / proof invalid");
-      });
+      const initialStakeBal = await rewardContract.balanceOf(stakingAccount.address);
+      const initialUnderlyingBal = await stakingAccount.getBalance();
+
+      await rewardContract.connect(stakingAccount).stake(totalToStake, { value: totalToStake });
+
+      const postStakeBal = await rewardContract.balanceOf(stakingAccount.address);
+      const postUnderlyingBal = await stakingAccount.getBalance();
+
+      expect(postUnderlyingBal).to.be.below(initialUnderlyingBal);
+      expect(postStakeBal).to.be.above(initialStakeBal);
+    });
+
+    it("cannot stake 0", async () => {
+      await expect(rewardContract.stake(0, { value: 0 })).to.be.revertedWith("ETHPhase2Pool/ZeroStake");
+    });
+
+    it("cannot stake if value sent isn't equal to requested", async () => {
+      await expect(rewardContract.stake(toUnit(10))).to.be.revertedWith("ETHPhase2Pool/IncorrectEth");
     });
   });
 
   describe("earned()", () => {
-    const totalToStake = toUnit(100);
+    const totalToStake = toUnit(10);
     const rewardValue = toUnit(5000);
     const totalToDistribute = toUnit(5000);
 
@@ -308,10 +245,7 @@ describe("Phase1Pool", () => {
     });
 
     it("should be > 0 when staking", async () => {
-
-      await stakeToken.connect(owner).transfer(stakingAccount.address, totalToStake);
-      await stakeToken.connect(stakingAccount).approve(rewardContract.address, totalToStake);
-      await rewardContract.connect(stakingAccount).stakeWithProof(totalToStake, FAKE_PROOF);
+      await rewardContract.connect(stakingAccount).stake(totalToStake, { value: totalToStake });
 
       await rewardToken.connect(owner).transfer(rewardContract.address, rewardValue);
       await rewardContract.connect(rewardDistribution).notifyRewardAmount(rewardValue);
@@ -341,9 +275,7 @@ describe("Phase1Pool", () => {
 
     it("rewards token balance should rollover after DURATION", async () => {
 
-      await stakeToken.connect(owner).transfer(stakingAccount.address, totalToStake);
-      await stakeToken.connect(stakingAccount).approve(rewardContract.address, totalToStake);
-      await rewardContract.connect(stakingAccount).stakeWithProof(totalToStake, FAKE_PROOF);
+      await rewardContract.connect(stakingAccount).stake(totalToStake, { value: totalToStake });
 
       await rewardToken.connect(owner).transfer(rewardContract.address, totalToDistribute);
       await rewardContract.connect(rewardDistribution).notifyRewardAmount(totalToDistribute);
@@ -362,19 +294,15 @@ describe("Phase1Pool", () => {
   });
 
   describe("getReward()", () => {
-    const totalToStake = toUnit(100);
-    const totalToDistribute = toUnit(5000);
+    it("should increase rewards token balance", async () => {
+      const totalToStake = toUnit(10);
+      const totalToDistribute = toUnit(5000);
 
-    beforeEach(async () => {
-      await stakeToken.connect(owner).transfer(stakingAccount.address, totalToStake);
-      await stakeToken.connect(stakingAccount).approve(rewardContract.address, totalToStake);
-      await rewardContract.connect(stakingAccount).stakeWithProof(totalToStake, FAKE_PROOF);
+      await rewardContract.connect(stakingAccount).stake(totalToStake, { value: totalToStake });
 
       await rewardToken.connect(owner).transfer(rewardContract.address, totalToDistribute);
       await rewardContract.connect(rewardDistribution).notifyRewardAmount(totalToDistribute);
-    });
 
-    it("should increase rewards token balance", async () => {
       await increaseTime(ethers.provider, DAY);
 
       const initialRewardBal = await rewardToken.balanceOf(stakingAccount.address);
@@ -408,43 +336,44 @@ describe("Phase1Pool", () => {
       await expect(rewardContract.withdraw(toUnit(100))).to.be.revertedWith("SafeMath: subtraction overflow");
     });
 
-    it("should increases underlying token balance and decreases staking balance", async () => {
-      const totalToStake = toUnit(100);
-      await stakeToken.connect(owner).transfer(stakingAccount.address, totalToStake);
-      await stakeToken.connect(stakingAccount).approve(rewardContract.address, totalToStake);
-      await rewardContract.connect(stakingAccount).stakeWithProof(totalToStake, FAKE_PROOF);
+    it("should increases underlying token balance and decrease ETH balance", async () => {
+      const totalToStake = toUnit(10);
+      await rewardContract.connect(stakingAccount).stake(totalToStake, { value: totalToStake });
 
-      const initialUnderlyingBal = await stakeToken.balanceOf(stakingAccount.address);
+      const initialUnderlyingBal = await stakingAccount.getBalance();
       const initialStakeBal = await rewardContract.balanceOf(stakingAccount.address);
 
       await rewardContract.connect(stakingAccount).withdraw(totalToStake);
 
-      const postUnderlyingBal = await stakeToken.balanceOf(stakingAccount.address);
+      const postUnderlyingBal = await stakingAccount.getBalance();
       const postStakeBal = await rewardContract.balanceOf(stakingAccount.address);
 
+      console.log(`ETH: ${formatUnits(initialUnderlyingBal)} -> ${formatUnits(postUnderlyingBal)}`);
+      console.log(`Staked ETH: ${formatUnits(initialStakeBal)} -> ${formatUnits(postStakeBal)}`);
+
+
       expect(postStakeBal.add(ethers.BigNumber.from(totalToStake))).to.be.equal(initialStakeBal);
-      expect(initialUnderlyingBal.add(ethers.BigNumber.from(totalToStake))).to.be.equal(postUnderlyingBal);
+
+      // Give some allowances as ETH is used for txns.
+      expect(initialUnderlyingBal.add(ethers.BigNumber.from(totalToStake))).to.be.gte(postUnderlyingBal);
+      expect(initialUnderlyingBal.add(ethers.BigNumber.from(totalToStake).sub(toUnit(0.1)))).to.be.lt(postUnderlyingBal);
     });
 
     it("cannot withdraw 0", async () => {
-      await expect(rewardContract.withdraw(0)).to.be.revertedWith("Cannot withdraw 0");
+      await expect(rewardContract.withdraw(0)).to.be.revertedWith("ZeroWithdraw");
     });
   });
 
   describe("exit()", () => {
-    beforeEach(async () => {
-      const totalToStake = toUnit(100);
+    it("should retrieve all earned and increase rewards bal", async () => {
+      const totalToStake = toUnit(10);
       const totalToDistribute = toUnit(5000);
 
-      await stakeToken.connect(owner).transfer(stakingAccount.address, totalToStake);
-      await stakeToken.connect(stakingAccount).approve(rewardContract.address, totalToStake);
-      await rewardContract.connect(stakingAccount).stakeWithProof(totalToStake, FAKE_PROOF);
+      await rewardContract.connect(stakingAccount).stake(totalToStake, { value: totalToStake });
 
       await rewardToken.connect(owner).transfer(rewardContract.address, totalToDistribute);
       await rewardContract.connect(rewardDistribution).notifyRewardAmount(toUnit(5000));
-    });
 
-    it("should retrieve all earned and increase rewards bal", async () => {
       await increaseTime(ethers.provider, DAY);
 
       const initialRewardBal = await rewardToken.balanceOf(stakingAccount.address);
@@ -460,43 +389,44 @@ describe("Phase1Pool", () => {
   });
 
   describe("notifyRewardAmount()", () => {
-    let localPhase1Pool: Phase1Pool;
+    let localETHPhase2Pool: ETHPhase2Pool;
 
     beforeEach(async () => {
-      localPhase1Pool = await setupContract<Phase1Pool>({
+      localETHPhase2Pool = await setupContract<ETHPhase2Pool>({
         accounts: [owner],
-        name: "Phase1Pool",
-        args: [owner.address, rewardDistribution.address, mockWhitelist.address, rewardToken.address, stakeToken.address, BigNumber.from(1).pow(22)],
+        name: "ETHPhase2Pool",
+        args: [owner.address, rewardDistribution.address, rewardToken.address],
       });
 
-      await localPhase1Pool.connect(owner).setRewardDistribution(rewardDistribution.address);
+      await localETHPhase2Pool.connect(owner).setRewardDistribution(rewardDistribution.address);
     });
 
     it("Reverts if the provided reward is greater than the balance.", async () => {
       const rewardValue = toUnit(1000);
-      await rewardToken.connect(owner).transfer(localPhase1Pool.address, rewardValue);
+      await rewardToken.connect(owner).transfer(localETHPhase2Pool.address, rewardValue);
       expect(
-        localPhase1Pool.connect(rewardDistribution).notifyRewardAmount(rewardValue.add(toUnit(0.1)))
+        localETHPhase2Pool.connect(rewardDistribution).notifyRewardAmount(rewardValue.add(toUnit(0.1)))
       ).to.be.revertedWith(
-        "Phase2Pool::notifyRewardAmount: Insufficent balance for reward rate"
+        "ETHPhase2Pool/LowRewardBalance"
       );
     });
 
     it("Reverts if the provided reward is greater than the balance, plus rolled-over balance.", async () => {
       const rewardValue = toUnit(1000);
-      await rewardToken.connect(owner).transfer(localPhase1Pool.address, rewardValue);
-      localPhase1Pool.connect(rewardDistribution).notifyRewardAmount(rewardValue);
-      await rewardToken.connect(owner).transfer(localPhase1Pool.address, rewardValue);
+      await rewardToken.connect(owner).transfer(localETHPhase2Pool.address, rewardValue);
+      localETHPhase2Pool.connect(rewardDistribution).notifyRewardAmount(rewardValue);
+      await rewardToken.connect(owner).transfer(localETHPhase2Pool.address, rewardValue);
       // Now take into account any leftover quantity.
       expect(
-        localPhase1Pool.connect(rewardDistribution).notifyRewardAmount(rewardValue.add(toUnit(0.1)))
-      ).to.be.revertedWith("Phase2Pool::notifyRewardAmount: Insufficent balance for reward rate");
+        localETHPhase2Pool.connect(rewardDistribution).notifyRewardAmount(rewardValue.add(toUnit(0.1)))
+      ).to.be.revertedWith("ETHPhase2Pool/LowRewardBalance");
     });
   });
 
   describe("Integration Tests", () => {
     const totalToDistribute = toUnit(35000);
-    const totalToStake = toUnit(500);
+    const totalToStake = toUnit(10);
+    const initialWithdraw = toUnit(5);
 
     // Note that this happens _beforeEach_ is necessary to have
     // this occur _after_ contract setup.
@@ -506,15 +436,11 @@ describe("Phase1Pool", () => {
 
       // Populate RewardDistribution with Rewards Tokens
       await rewardToken.connect(owner).mint(rewardDistribution.address, totalToDistribute);
-
-      // Populate STKN Token to staking account
-      await stakeToken.connect(owner).mint(stakingAccount.address, totalToStake);
     });
 
     it("stake and claim", async () => {
-      // Stake STKN Tokens
-      await stakeToken.connect(stakingAccount).approve(rewardContract.address, totalToStake);
-      await rewardContract.connect(stakingAccount).stakeWithProof(totalToStake, FAKE_PROOF);
+      // Stake ETH
+      await rewardContract.connect(stakingAccount).stake(totalToStake, { value: totalToStake });
 
       // Lock Rewards in contract, and notify of Reward Amount.
       await rewardToken.connect(rewardDistribution).transfer(rewardContract.address, totalToDistribute);
@@ -525,7 +451,9 @@ describe("Phase1Pool", () => {
       const curTimestamp = await currentTime(ethers.provider);
       expect(parseInt(periodFinish.toString(), 10)).to.be.equal(BigNumber.from(curTimestamp).add(DURATION));
 
-      await increaseTime(ethers.provider, DURATION);
+      // Reward duration is 7 days, so we'll
+      // increaseTime time by 6 days to prevent expiration
+      await increaseTime(ethers.provider, DAY.mul(6));
 
       // Reward rate and reward per token
       const rewardRate = await rewardContract.rewardRate();
@@ -540,9 +468,7 @@ describe("Phase1Pool", () => {
 
       // Make sure after withdrawing, we still have the ~amount of rewardRewards
       // The two values will be a bit different as time has "passed"
-      const initialWithdraw = toUnit(100);
-      await rewardContract.connect(stakingAccount).withdraw(initialWithdraw);
-      expect(initialWithdraw).to.be.equal(await stakeToken.balanceOf(stakingAccount.address));
+      await expect(await rewardContract.connect(stakingAccount).withdraw(initialWithdraw)).to.changeEtherBalance(stakingAccount, initialWithdraw);
 
       const rewardRewardsEarnedPostWithdraw = await rewardContract.earned(stakingAccount.address);
 
@@ -557,10 +483,101 @@ describe("Phase1Pool", () => {
       expect(postRewardRewardBal).to.be.above(initialRewardBal);
 
       // Exit
-      const preExitLPBal = await stakeToken.balanceOf(stakingAccount.address);
-      await rewardContract.connect(stakingAccount).exit();
-      const postExitLPBal = await stakeToken.balanceOf(stakingAccount.address);
-      expect(postExitLPBal).to.be.above(preExitLPBal);
+      await expect(await rewardContract.connect(stakingAccount).exit()).to.changeEtherBalance(stakingAccount, totalToStake.sub(initialWithdraw));
+    });
+  });
+
+  describe("Scenario Testing", () => {
+    const totalToDistribute = toUnit(35_000);
+    const stakePerPerson = toUnit(10);
+
+    beforeEach(async () => {
+      // Set rewardDistribution address
+      await rewardContract.connect(owner).setRewardDistribution(rewardDistribution.address);
+
+      // Populate RewardDistribution with Rewards Tokens
+      await rewardToken.connect(owner).mint(rewardDistribution.address, totalToDistribute);
+
+      // Lock Rewards in contract, and notify of Reward Amount.
+      await rewardToken.connect(rewardDistribution).transfer(rewardContract.address, totalToDistribute);
+      await rewardContract.connect(rewardDistribution).notifyRewardAmount(totalToDistribute);
+
+    });
+
+    it("all submit 10 at start", async () => {
+      // Stake ETH
+      await rewardContract.connect(others[0]).stake(stakePerPerson, { value: stakePerPerson });
+      await rewardContract.connect(others[1]).stake(stakePerPerson, { value: stakePerPerson });
+      await rewardContract.connect(others[2]).stake(stakePerPerson, { value: stakePerPerson });
+
+      await increaseTime(ethers.provider, DAY.mul(7));
+
+      // Reward rate and reward per token
+      const rewardPerToken = await rewardContract.rewardPerToken();
+
+      console.log(`
+        rewardPerToken: ${fromUnit(rewardPerToken)}
+      `);
+
+      // Make sure we earned in proportion to reward per token
+      const rewardsEarned0 = await rewardContract.earned(others[0].address);
+      const rewardsEarned1 = await rewardContract.earned(others[1].address);
+      const rewardsEarned2 = await rewardContract.earned(others[2].address);
+
+      // Expect the amount earned to be on par as everyone contributed at the same time.
+
+      console.log(`
+        Rewards Earned [0]: ${fromUnit(rewardsEarned0)}
+        Rewards Earned [1]: ${fromUnit(rewardsEarned1)}
+        Rewards Earned [2]: ${fromUnit(rewardsEarned2)}
+      `);
+
+      expect(rewardsEarned0).to.be.gte(rewardsEarned1);
+      expect(rewardsEarned1).to.be.gte(rewardsEarned2);
+
+      expect(rewardsEarned0.sub(rewardsEarned2)).to.be.lt(toUnit(1));
+    });
+
+
+    it("submit 10 every day", async () => {
+      console.log(`rewardPerToken (D0): ${fromUnit(await rewardContract.rewardPerToken())}`);
+
+      // Stake ETH
+      await rewardContract.connect(others[0]).stake(stakePerPerson, { value: stakePerPerson });
+
+      await increaseTime(ethers.provider, DAY);
+      console.log(`rewardPerToken (D1): ${fromUnit(await rewardContract.rewardPerToken())}`);
+
+      await rewardContract.connect(others[1]).stake(stakePerPerson, { value: stakePerPerson });
+
+      await increaseTime(ethers.provider, DAY);
+      console.log(`rewardPerToken (D2): ${fromUnit(await rewardContract.rewardPerToken())}`);
+
+      await rewardContract.connect(others[2]).stake(stakePerPerson, { value: stakePerPerson });
+
+      await increaseTime(ethers.provider, DAY);
+      console.log(`rewardPerToken (D3): ${fromUnit(await rewardContract.rewardPerToken())}`);
+
+      // Make sure we earned in proportion to reward per token
+      const rewardsEarned0 = await rewardContract.earned(others[0].address);
+      const rewardsEarned1 = await rewardContract.earned(others[1].address);
+      const rewardsEarned2 = await rewardContract.earned(others[2].address);
+
+
+      // Expect diminishing returns as we add more to the pool
+      console.log(`
+        Rewards Earned [0]: ${fromUnit(rewardsEarned0)}
+        Rewards Earned [1]: ${fromUnit(rewardsEarned1)}
+        Rewards Earned [2]: ${fromUnit(rewardsEarned2)}
+      `);
+
+      // We'd expect the first commer to gain more than double what the second commer would get
+      expect(rewardsEarned0).to.be.gte(rewardsEarned1.mul(2));
+      // We'd expect the 2nd commer to gain more than the 3rd 
+      // commer by a factor of 2, but less than the the difference
+      // between 1st and second
+      expect(rewardsEarned1).to.be.gte(rewardsEarned2.mul(2));
+      expect(rewardsEarned0.sub(rewardsEarned1)).to.be.gt(rewardsEarned1.sub(rewardsEarned2));
     });
   });
 });

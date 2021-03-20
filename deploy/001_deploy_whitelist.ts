@@ -6,6 +6,7 @@ import fs from "fs";
 import MerkleTree from "../test/merkletree";
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
+  console.log("(001) Deploy Whitelist");
   const { deployments, getNamedAccounts } = hre;
   const { deploy } = deployments;
 
@@ -19,7 +20,6 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Setup Whitelist
   const whitelistFp = fs.readFileSync("./whitelist.json", "utf-8");
   const whitelistEntries = JSON.parse(whitelistFp);
-  
   console.log("Uploading whitelist...");
   const uploadedFile = await fleekStorage.upload({
     apiKey: process.env.FLEEK_API_KEY as string,

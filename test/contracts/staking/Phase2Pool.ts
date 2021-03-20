@@ -4,9 +4,9 @@ import { solidity } from "ethereum-waffle";
 import {
   Phase2Pool,
   TokenMock,
-} from "../../typechain";
+} from "../../../typechain";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signer-with-address";
-import { currentTime, DAY, toUnit, expectOnlyAddressCanInvoke, increaseTime, mockToken, setupContract, WEEK, ensureOnlyExpectedMutativeFunctions, fromUnit, DEFAULT_ROLE, role } from "../helper";
+import { currentTime, DAY, toUnit, expectOnlyAddressCanInvoke, increaseTime, mockToken, setupContract, WEEK, ensureOnlyExpectedMutativeFunctions, fromUnit, DEFAULT_ROLE, role } from "../../helper";
 import { BigNumber } from "ethers";
 
 chai.use(solidity);

@@ -5,9 +5,9 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signer-wit
 
 import {
   MerkleWhitelist,
-} from "../../typechain";
-import { DEFAULT_ROLE, ensureOnlyExpectedMutativeFunctions, expectOnlyAddressCanInvoke, randomString, role, setupContract } from "../helper";
-import MerkleTree from "../merkletree";
+} from "../../../typechain";
+import { DEFAULT_ROLE, ensureOnlyExpectedMutativeFunctions, expectOnlyAddressCanInvoke, randomString, role, setupContract } from "../../helper";
+import MerkleTree from "../../merkletree";
 import _ from "underscore";
 
 chai.use(solidity);

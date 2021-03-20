@@ -1,3 +1,31 @@
 {
-  "extends": "solhint:default"
+  "extends": "solhint:recommended",
+  "rules": {
+    "code-complexity": [
+      "warn",
+      7
+    ],
+    "function-max-lines": [
+      "warn",
+      50
+    ],
+    "func-visibility": [
+      "warn",
+      {
+        "ignoreConstructors": true
+      }
+    ],
+    "func-param-name-mixedcase": "warn",
+    "modifier-name-mixedcase": "warn",
+    "private-vars-leading-underscore": [
+      "warn",
+      {
+        "strict": false
+      }
+    ],
+    "compiler-version": [
+      "error",
+      "^0.7.0"
+    ]
+  }
 }

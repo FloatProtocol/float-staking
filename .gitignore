@@ -1,16 +1,29 @@
+# Yarn / Node build
 node_modules/
+/*.log
+coverage*
+
+# Hardhat build
 cache/
 build/
 typechain/
 artifacts/
-coverage*
+dist/
+
+# Environment variables
 .env*
 !.env.example
-whitelist.json
+
+# Deployment artifacts
+whitelist*.json
 contractsInfo.json
+merkleTree.json
+
+# Editor Setup
 .vscode/*
 !.vscode/*.default
 
+# Deployments
 deployments/*
 !deployments/mainnet
 .openzeppelin/*

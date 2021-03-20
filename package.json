@@ -1,11 +1,12 @@
 {
   "name": "float-contracts",
   "version": "0.0.2",
-  "description": "",
+  "description": "The smart contracts behind Float Protocol",
   "scripts": {
     "postinstall": "node ./.setup.js",
-    "compile": "hardhat compile",
-    "coverage": "yarn compile && hardhat coverage --temp artifacts --network coverage",
+    "prepare": "yarn build",
+    "build": "hardhat compile 2> /dev/null && hardhat typechain",
+    "coverage": "hardhat coverage --temp artifacts --network coverage --solcoverjs ./.solcover.js",
     "test": "cross-env hardhat test",
     "gas": "cross-env REPORT_GAS=true hardhat test",
     "lint": "concurrently yarn:lint:js yarn:lint:sol",
@@ -19,9 +20,6 @@
     "local:deploy": "hardhat --network localhost deploy",
     "local:run": "cross-env HARDHAT_NETWORK=localhost ts-node --files",
     "local:export": "hardhat --network localhost export",
-    "staging:deploy": "hardhat --network staging deploy",
-    "staging:export": "hardhat --network staging export",
-    "staging:run": "cross-env HARDHAT_NETWORK=staging ts-node --files",
     "rinkeby:deploy": "hardhat --network rinkeby deploy",
     "rinkeby:export": "hardhat --network rinkeby export",
     "rinkeby:run": "cross-env HARDHAT_NETWORK=rinkeby ts-node --files",
@@ -70,6 +68,8 @@
     "hardhat-deploy-ethers": "^0.3.0-beta.7",
     "hardhat-gas-reporter": "^1.0.4",
     "hardhat-typechain": "^0.3.4",
+    "husky": ">=4",
+    "lint-staged": ">=10",
     "solhint": "^3.3.2",
     "solidity-coverage": "^0.7.13",
     "solium": "^1.2.5",
@@ -79,8 +79,19 @@
     "typescript": "^4.1.3"
   },
   "dependencies": {
+    "@chainlink/contracts": "^0.1.6",
     "@openzeppelin/contracts": "^3.3.0",
     "@openzeppelin/contracts-upgradeable": "^3.3.0",
+    "@uniswap/v2-core": "^1.0.1",
+    "@uniswap/v2-periphery": "^1.1.0-beta.0",
     "synthetix": "^2.35.4"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.ts": "eslint --cache --fix"
   }
 }

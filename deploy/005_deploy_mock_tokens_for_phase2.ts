@@ -12,7 +12,7 @@ async function deployToken(name: string, args: unknown[], context: { deploy: any
 }
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
-  console.log("(002) Deploy Mock Tokens");
+  console.log("(005) Deploy additional mock tokens for Phase 2");
   const { deployments, getNamedAccounts, network } = hre;
   const { deploy } = deployments;
 
@@ -22,26 +22,41 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const { deployer } = await getNamedAccounts();
 
-  await deployToken("DAI", [
+  await deployToken("sLP", [
     deployer,
-    "Dai Stablecoin",
-    "DAI",
+    "BANK-ETH sLP",
+    "SLP",
     18,
   ], { deploy, deployer });
 
-  await deployToken("USDC", [
+  await deployToken("wBTC", [
     deployer,
-    "USD Coin",
-    "USDC",
-    6,
+    "Wrapped Bitcoin",
+    "wBTC",
+    8,
   ], { deploy, deployer });
 
-  await deployToken("USDT", [
+  await deployToken("YAM", [
     deployer,
-    "Tether USD",
-    "USDT",
-    6,
+    "YAM",
+    "YAM",
+    18,
   ], { deploy, deployer });
+
+  await deployToken("SUSHI", [
+    deployer,
+    "SushiToken",
+    "SUSHI",
+    18,
+  ], { deploy, deployer });
+
+  await deployToken("YFI", [
+    deployer,
+    "yearn.finance",
+    "YFI",
+    18,
+  ], { deploy, deployer });
+
 };
 
 export default func;

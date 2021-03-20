@@ -12,7 +12,7 @@ import "@openzeppelin/hardhat-upgrades";
 
 import { node_url, accounts } from "./utils/network";
 
-const gasPrice = 151e9;
+const gasPrice = 155e9;
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -22,10 +22,13 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 999999, 
+            runs: 999999,
           }
         }
       },
+      // Used for Uniswap v2 Periphery
+      { version: "0.6.6" },
+      // Used for (some) OpenZeppelin
       { version: "0.5.5" },
     ],
   },
@@ -35,6 +38,10 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       accounts: accounts(),
+    },
+    coverage: {
+      // Coverage launches its own ganache-cli client
+      url: "http://127.0.0.1:8555",
     },
     localhost: {
       url: "http://localhost:8545",
@@ -60,7 +67,7 @@ const config: HardhatUserConfig = {
   },
   gasReporter: {
     currency: "ETH",
-    gasPrice: 101,
+    gasPrice: gasPrice,
     enabled: process.env.REPORT_GAS ? true : false,
     coinmarketcap: process.env.COINMARKET_API_KEY,
     maxMethodDiff: 10,

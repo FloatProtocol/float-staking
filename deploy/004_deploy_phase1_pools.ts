@@ -3,6 +3,7 @@ import { DeployFunction } from "hardhat-deploy/types";
 import { BigNumber } from "ethers";
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
+  console.log("(004) Deploy Phase 1 Pool");
   const { deployments, getNamedAccounts, network } = hre;
   const { deploy } = deployments;
 
@@ -16,7 +17,6 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     daiTokenAddr = "0x2D69aD895797C880abce92437788047BA0Eb7fF6";
     const usdcToken = await deployments.get("USDC");
     const usdtToken = await deployments.get("USDT");
-    
     usdcTokenAddr = usdcToken.address;
     usdtTokenAddr = usdtToken.address;
   }
@@ -25,7 +25,6 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     const daiToken = await deployments.get("DAI");
     const usdcToken = await deployments.get("USDC");
     const usdtToken = await deployments.get("USDT");
-    
     daiTokenAddr = daiToken.address;
     usdcTokenAddr = usdcToken.address;
     usdtTokenAddr = usdtToken.address;
@@ -81,7 +80,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     bankToken.address,
     usdtTokenAddr,
     BigNumber.from(10).pow(6).mul(10000).toHexString(),
-  ]; 
+  ];
   await deploy("USDTPool", {
     from: deployer,
     contract: "Phase1Pool",
